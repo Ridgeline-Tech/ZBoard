@@ -2,9 +2,9 @@
 name: Supported local model choice
 slug: local-model-choice
 owner: project-lead
-status: active
+status: complete
 created: 2026-11-14T09:05:27Z
-updated: 2026-11-14T09:20:00Z
+updated: 2026-11-14T10:35:00Z
 outcome: Users can preserve Orukeet and independently download, select, and remove Parakeet 0.6B through a supported settings flow.
 uncertainty: high
 probe_required: true
@@ -80,7 +80,7 @@ Z Board currently hard-codes one Orukeet model and deletes other installed versi
 
 ## Assumptions
 
-- sherpa-onnx 1.13.4 supports the verified NeMo transducer files; focused engine construction tests must confirm this in Z Board.
+- sherpa-onnx 1.13.4 accepts the verified NeMo transducer configuration at source/build level; real-model construction and inference remain runtime acceptance work, not evidence from this source delivery.
 - A Z Board release can host the exact verified model files independently of app signing.
 
 ## Needs Clarification

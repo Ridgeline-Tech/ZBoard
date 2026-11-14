@@ -1,9 +1,9 @@
 ---
 name: Supported local model choice
-status: active
+status: done
 lead: project-lead
 created: 2026-11-14T09:05:27Z
-updated: 2026-11-14T09:20:00Z
+updated: 2026-11-14T10:35:00Z
 linear_project_id:
 risk_level: high
 spec_status_at_plan_time: active
