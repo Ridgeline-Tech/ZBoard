@@ -16,6 +16,7 @@
 
 package dev.patrickgold.florisboard.app.settings.voxtral
 
+import dev.patrickgold.florisboard.ime.text.dictation.DeepgramTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.VoxtralRelayTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyMode
 import dev.patrickgold.florisboard.ime.text.dictation.offline.DownloadWaitReason
@@ -114,6 +115,14 @@ class AiSettingsLogicTest : FunSpec({
             AiSettings.draftOf(" https://asr.example.com ", default) shouldBe "https://asr.example.com"
             AiSettings.storedValueOf("  ", default) shouldBe default
             AiSettings.storedValueOf(" https://asr.example.com ", default) shouldBe "https://asr.example.com"
+        }
+
+        test("an empty model stores the default for the address being saved") {
+            AiSettings.cloudModelToStore(DeepgramTranscriptionClient.EndpointUrl, "  ") shouldBe
+                DeepgramTranscriptionClient.DefaultModel
+            AiSettings.cloudModelToStore(VoxtralRelayTranscriptionClient.DefaultEndpointUrl, "  ") shouldBe
+                VoxtralRelayTranscriptionClient.DefaultModel
+            AiSettings.cloudModelToStore(DeepgramTranscriptionClient.EndpointUrl, " nova-2 ") shouldBe "nova-2"
         }
 
         test("only http and https addresses can be saved") {

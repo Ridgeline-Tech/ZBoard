@@ -17,12 +17,20 @@ stream: native-cloud-transcription
 - `:app:testDebugUnitTest` passed in 20m52s; all seven Deepgram contract cases and the existing unit suites passed.
 - `:app:compileDebugKotlin :app:compileReleaseKotlin :app:assembleRelease` passed in 5m53s, including lint-vital and R8 release packaging.
 - `.agents/scripts/pm/validate.sh` passed with 0 errors and 0 warnings through Git-for-Windows Bash; `git diff --check` passed.
+- Initial source candidate committed as `5d375bf1655f6d879fd469e36ef79ab3160ee00d` (tree `3bb6176934055fc5a870329a8ab852ce9217c709`).
+- Independent review found one medium settings-path defect: saving a blank model after entering the Deepgram endpoint retained the generic `voxtral-mini-latest` default instead of native Deepgram `nova-3`.
+- Repaired model normalization to derive the default from the endpoint being saved, and added both pure settings coverage and an end-to-end prepared-request regression case.
+- The repaired candidate's complete `:app:testDebugUnitTest` passed in 19m46s. Deepgram was 8/8 and `AiSettingsLogicTest` was 27/27 with zero skips or failures.
+- The repaired candidate's `:app:compileReleaseKotlin :app:assembleRelease` passed in 5m11s, including lint-vital, R8, and release packaging; `git diff --check` remained clean.
+
+## Reusable Lesson
+- This repository's Kotest/Gradle setup did not honor attempted per-test selectors reliably: name filters produced skipped targets and Gradle class filters reported no tests found. Treat those runs as non-evidence; for a repaired candidate, retain and wait for the already-established full unit gate rather than reporting a filtered zero exit as a pass.
 
 ## In Progress
-- Commit the exact verified candidate and obtain independent review.
+- Commit the exact review repair and return the new immutable candidate to the retained independent reviewer.
 
 ## Blockers
 - None.
 
 ## Next Actions
-- Commit the exact candidate, obtain independent review, then run the existing pull-request and CI gates without changing catalog, signer, or device state.
+- Commit the repair, obtain independent re-review, then run the existing pull-request and CI gates without changing catalog, signer, or device state.

@@ -10,6 +10,7 @@
 
 package dev.patrickgold.florisboard.ime.text.dictation
 
+import dev.patrickgold.florisboard.app.settings.voxtral.AiSettings
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyField
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -57,6 +58,22 @@ class DeepgramTranscriptionClientTest : FunSpec({
             vocabulary = emptyList(),
             vocabularyField = CloudVocabularyField.NONE,
         ).shouldBeInstanceOf<VoxtralRelayTranscriptionClient>()
+    }
+
+    test("saving a blank model for Deepgram prepares a Nova-3 request") {
+        val endpoint = DeepgramTranscriptionClient.EndpointUrl
+        val storedModel = AiSettings.cloudModelToStore(endpoint, " ")
+        val client = CloudTranscriptionClientFactory.create(
+            apiKey = "test-key",
+            endpointUrl = endpoint,
+            model = storedModel,
+            languageHint = null,
+            vocabulary = emptyList(),
+            vocabularyField = CloudVocabularyField.NONE,
+        ).shouldBeInstanceOf<DeepgramTranscriptionClient>()
+
+        client.prepareRequest(recording).getOrThrow().requestUrl shouldBe
+            "https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true"
     }
 
     test("request uses fixed HTTPS destination, Token auth, raw audio metadata and encoded query values") {
