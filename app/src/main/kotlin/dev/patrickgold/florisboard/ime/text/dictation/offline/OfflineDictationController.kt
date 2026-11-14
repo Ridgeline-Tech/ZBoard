@@ -20,11 +20,13 @@ import org.ownkey.offline.*
 enum class ModelPhase { CHECKING, IDLE, WAITING_FOR_NETWORK, DOWNLOADING, VERIFYING, ACTIVATING, REMOVING }
 data class LocalModelState(
     val phase: ModelPhase = ModelPhase.CHECKING,
+    val operationModelId: String? = null,
     val installed: Set<String> = emptySet(),
     val currentId: String? = null,
     val hasStoredData: Boolean = false,
     val progress: DownloadProgress? = null,
     val transferPhase: ModelPhase? = null,
+    val transferModelId: String? = null,
     val allowMobileData: Boolean = false,
     val error: LocalAsrFailure? = null,
     /** Technical note behind [error], shown in internal builds so a phone failure can be reported. */
@@ -52,42 +54,61 @@ class OfflineDictationController(private val app: FlorisApplication) {
     val selected: Boolean get() = prefs.voxtral.dictationBackend.get() == TranscriptionBackend.ORUKEET.preference
     val ready: Boolean get() = compatible && store.currentId != null && state.value.phase !in setOf(ModelPhase.ACTIVATING, ModelPhase.REMOVING)
 
-    private fun publish(phase: ModelPhase = ModelPhase.IDLE, error: LocalAsrFailure? = null, errorDetail: String? = null) {
+    private fun publish(
+        phase: ModelPhase = ModelPhase.IDLE,
+        modelId: String? = null,
+        error: LocalAsrFailure? = null,
+        errorDetail: String? = null,
+    ) {
         _state.update {
             it.copy(
-                phase = phase, installed = store.installedIds, currentId = store.currentId,
+                phase = phase, operationModelId = if (phase == ModelPhase.IDLE) null else modelId,
+                installed = store.installedIds, currentId = store.currentId,
                 hasStoredData = store.hasStoredData, error = error, errorDetail = errorDetail,
             )
         }
     }
-    private fun transferState(phase: ModelPhase?, progress: DownloadProgress? = null, error: LocalAsrFailure? = null) {
+    private fun transferState(
+        phase: ModelPhase?,
+        modelId: String? = _state.value.transferModelId,
+        progress: DownloadProgress? = null,
+        error: LocalAsrFailure? = null,
+    ) {
         _state.update {
             it.copy(
-                transferPhase = phase, progress = progress, error = error, errorDetail = null,
+                transferPhase = phase, transferModelId = if (phase == null) null else modelId,
+                progress = progress, error = error, errorDetail = null,
                 installed = store.installedIds, hasStoredData = store.hasStoredData,
             )
         }
     }
-    fun waitingForNetwork(allowMobileData: Boolean) {
+    fun waitingForNetwork(modelId: String, allowMobileData: Boolean) {
+        store.release(modelId)
         _state.update { it.copy(allowMobileData = allowMobileData) }
-        transferState(ModelPhase.WAITING_FOR_NETWORK)
+        transferState(ModelPhase.WAITING_FOR_NETWORK, modelId)
     }
     fun downloadFailed() = transferState(null, error = LocalAsrFailure.DOWNLOAD)
     fun reportError(reason: LocalAsrFailure) = publish(error = reason)
 
     suspend fun download(
+        id: String,
         open: (java.net.URL) -> java.net.HttpURLConnection = { it.openConnection() as java.net.HttpURLConnection },
         onProgress: (DownloadProgress) -> Unit,
     ) {
         initialized.await()
         if (!compatible) throw LocalAsrException(LocalAsrFailure.UNSUPPORTED)
+        val release = store.release(id)
         downloadLock.lock()
         transfer = currentCoroutineContext()[Job]
         try {
-            transferState(ModelPhase.DOWNLOADING)
-            if (ModelCatalog.current.id !in store.installedIds) {
-                ModelDownloader(store, open).download(ModelCatalog.current) {
-                    transferState(if (it.verifying) ModelPhase.VERIFYING else ModelPhase.DOWNLOADING, it)
+            transferState(ModelPhase.DOWNLOADING, id)
+            if (id !in store.installedIds) {
+                ModelDownloader(store, open).download(release) {
+                    transferState(
+                        if (it.verifying) ModelPhase.VERIFYING else ModelPhase.DOWNLOADING,
+                        id,
+                        it,
+                    )
                     onProgress(it)
                 }
             }
@@ -107,7 +128,7 @@ class OfflineDictationController(private val app: FlorisApplication) {
         lifecycle.withLock {
             if (!compatible) throw LocalAsrException(LocalAsrFailure.UNSUPPORTED)
             if (store.hasLeases) throw LocalAsrException(LocalAsrFailure.BUSY)
-            publish(ModelPhase.ACTIVATING)
+            publish(ModelPhase.ACTIVATING, id)
             try {
                 if (!store.verify(id)) throw LocalAsrException(LocalAsrFailure.MODEL_DAMAGED)
                 runtime.unload()
@@ -118,7 +139,6 @@ class OfflineDictationController(private val app: FlorisApplication) {
                     prefs.voxtral.previousDictationBackend.set(prefs.voxtral.dictationBackend.get())
                     prefs.voxtral.dictationBackend.set(TranscriptionBackend.ORUKEET.preference)
                 }
-                store.removeUnusedVersions()
                 publish()
             } catch (cancel: CancellationException) {
                 withContext(NonCancellable) { runtime.unload() }; publish(); throw cancel
@@ -155,7 +175,20 @@ class OfflineDictationController(private val app: FlorisApplication) {
         }
     }
 
-    suspend fun delete() = withContext(Dispatchers.IO) {
+    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        initialized.await()
+        lifecycle.withLock {
+            if (state.value.transferModelId == id) ModelDownloads.cancel(app)
+            downloadLock.withLock {
+                publish(ModelPhase.REMOVING, id)
+                try { store.remove(id); publish() }
+                catch (error: Exception) { publish(error = LocalAsrFailure.BUSY); throw error }
+            }
+        }
+    }
+
+    /** Test-fixture cleanup only. The settings UI deliberately exposes only inactive per-model deletion. */
+    internal suspend fun deleteAll() = withContext(Dispatchers.IO) {
         initialized.await()
         lifecycle.withLock {
             ModelDownloads.cancel(app)
@@ -164,8 +197,13 @@ class OfflineDictationController(private val app: FlorisApplication) {
                 if (selected || store.hasLeases) invalidateVoice()
                 runtime.unload()
                 if (selected) prefs.voxtral.dictationBackend.set(prefs.voxtral.previousDictationBackend.get())
-                try { store.removeAll(); publish() }
-                catch (error: Exception) { publish(error = LocalAsrFailure.BUSY); throw error }
+                try {
+                    store.removeAll()
+                    publish()
+                } catch (error: Exception) {
+                    publish(error = LocalAsrFailure.BUSY)
+                    throw error
+                }
             }
         }
     }

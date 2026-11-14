@@ -22,7 +22,12 @@ class OrukeetIntegrationTest {
     @Test fun downloadJobPreservesTransportConsentWithoutRejectingMeteredWifiOrVpn() {
         assumeTrue(android.os.Build.VERSION.SDK_INT >= 34)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val job = dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.createJob(context, "test", false)
+        val job = dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.createJob(
+            context,
+            ModelCatalog.orukeet.id,
+            "test",
+            false,
+        )
         val request = requireNotNull(job.requiredNetwork)
         assertTrue(request.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI))
         assertTrue(request.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET))
@@ -42,10 +47,11 @@ class OrukeetIntegrationTest {
         try {
             record.parentFile!!.mkdirs()
             record.writeText("retired-model:token")
-            assertFalse(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, "token"))
+            assertFalse(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, ModelCatalog.orukeet.id, "token"))
             record.writeText("${ModelCatalog.current.id}:token")
-            assertTrue(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, "token"))
-            assertFalse(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, "different-token"))
+            assertTrue(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, ModelCatalog.orukeet.id, "token"))
+            assertFalse(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, ModelCatalog.parakeet.id, "token"))
+            assertFalse(dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.authorized(context, ModelCatalog.orukeet.id, "different-token"))
         } finally { if (previous == null) record.delete() else record.writeBytes(previous) }
     }
 
@@ -72,11 +78,15 @@ class OrukeetIntegrationTest {
         controller.state.first { it.phase != ModelPhase.CHECKING }
         val previous = prefs.voxtral.dictationBackend.get()
         try {
-            controller.delete()
+            controller.deleteAll()
             prefs.voxtral.dictationBackend.set("cloud")
             app.startActivity(android.content.Intent(app, dev.patrickgold.florisboard.app.FlorisAppActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             delay(2000)
-            dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.schedule(app, allowMobileData = false)
+            dev.patrickgold.florisboard.ime.text.dictation.offline.ModelDownloads.schedule(
+                app,
+                ModelCatalog.current.id,
+                allowMobileData = false,
+            )
             withTimeout(600_000) { controller.state.first { ModelCatalog.current.id in it.installed || it.error != null } }
             assertNull(controller.state.value.error)
             assertNull(controller.store.currentId)
@@ -179,7 +189,7 @@ class OrukeetIntegrationTest {
             assertEquals("cloud", prefs.voxtral.dictationBackend.get())
             assertEquals(RuntimeState.UNLOADED, controller.runtime.state.value)
             assertTrue(controller.store.installedIds.isNotEmpty())
-            controller.delete()
+            controller.deleteAll()
             assertTrue(controller.store.installedIds.isEmpty())
             assertNull(controller.store.currentId)
             assertEquals("cloud", prefs.voxtral.dictationBackend.get())

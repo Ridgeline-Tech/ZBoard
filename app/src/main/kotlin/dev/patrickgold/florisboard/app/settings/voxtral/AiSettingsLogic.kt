@@ -179,21 +179,21 @@ object AiSettings {
         catalogId: String = ModelCatalog.current.id,
     ): OrukeetModelValue {
         val candidateInstalled = catalogId in state.installed
+        val isTransfer = state.transferModelId == catalogId
+        val isOperation = state.operationModelId == catalogId
         return when {
             !compatible -> OrukeetModelValue.UNSUPPORTED
             state.phase == ModelPhase.CHECKING -> OrukeetModelValue.CHECKING
-            state.phase == ModelPhase.ACTIVATING -> OrukeetModelValue.LOADING
-            state.phase == ModelPhase.REMOVING -> OrukeetModelValue.DELETING
-            state.transferPhase == ModelPhase.VERIFYING -> OrukeetModelValue.VERIFYING
-            state.transferPhase == ModelPhase.WAITING_FOR_NETWORK -> when (waitReason) {
+            isOperation && state.phase == ModelPhase.ACTIVATING -> OrukeetModelValue.LOADING
+            isOperation && state.phase == ModelPhase.REMOVING -> OrukeetModelValue.DELETING
+            isTransfer && state.transferPhase == ModelPhase.VERIFYING -> OrukeetModelValue.VERIFYING
+            isTransfer && state.transferPhase == ModelPhase.WAITING_FOR_NETWORK -> when (waitReason) {
                 DownloadWaitReason.WIFI_REQUIRED -> OrukeetModelValue.WAITING_FOR_WIFI
                 DownloadWaitReason.NO_INTERNET -> OrukeetModelValue.WAITING_FOR_INTERNET
                 DownloadWaitReason.STARTING -> OrukeetModelValue.WAITING_TO_START
             }
-            state.transferPhase != null -> OrukeetModelValue.DOWNLOADING
-            // An older model still dictates while a newer one is offered.
-            state.currentId != null && state.currentId != catalogId -> OrukeetModelValue.UPDATE_AVAILABLE
-            active && state.currentId != null -> when (runtime) {
+            isTransfer && state.transferPhase != null -> OrukeetModelValue.DOWNLOADING
+            active && state.currentId == catalogId -> when (runtime) {
                 RuntimeState.LOADING -> OrukeetModelValue.LOADING
                 RuntimeState.TRANSCRIBING -> OrukeetModelValue.IN_USE
                 else -> OrukeetModelValue.READY
@@ -221,11 +221,9 @@ object AiSettings {
         return when {
             !candidateInstalled -> when {
                 error == LocalAsrFailure.DOWNLOAD -> OrukeetNextAction.RETRY_DOWNLOAD
-                state.currentId != null -> OrukeetNextAction.DOWNLOAD_UPDATE
                 else -> OrukeetNextAction.DOWNLOAD
             }
-            !active || state.currentId == null -> OrukeetNextAction.USE
-            state.currentId != catalogId -> OrukeetNextAction.APPLY_UPDATE
+            !active || state.currentId != catalogId -> OrukeetNextAction.USE
             else -> null
         }
     }

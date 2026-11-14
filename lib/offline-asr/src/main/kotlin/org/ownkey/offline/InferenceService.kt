@@ -14,7 +14,7 @@ class InferenceService : Service() {
         Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND); task.run() }, "ownkey-asr")
     }
     private var active = false
-    private var engine: OrukeetEngine? = null
+    private var engine: OfflineAsrEngine? = null
     private var version: String? = null
     private var live: LiveRun? = null
     private val idle = Runnable { terminate() }
@@ -76,7 +76,7 @@ class InferenceService : Service() {
     }
 
     /** Worker thread only. One resident engine, keyed by model and decoder profile; a profile change recreates it. */
-    private fun loadEngine(modelId: String?, hotwords: String): OrukeetEngine {
+    private fun loadEngine(modelId: String?, hotwords: String): OfflineAsrEngine {
         if (modelId == null) throw LocalAsrException(LocalAsrFailure.MODEL_MISSING)
         val release = ModelCatalog.trusted.firstOrNull { it.id == modelId }
             ?: throw LocalAsrException(LocalAsrFailure.MODEL_DAMAGED)
@@ -87,12 +87,16 @@ class InferenceService : Service() {
         if (hotwords.toByteArray(Charsets.UTF_8).size > HotwordTransport.MAX_BYTES) {
             throw LocalAsrException(LocalAsrFailure.RUNTIME)
         }
-        val profile = if (hotwords.isEmpty()) DecoderProfile.GREEDY else DecoderProfile.BEAM_HOTWORDS
+        val profile = if (hotwords.isEmpty() || release.hotwords == null) {
+            DecoderProfile.GREEDY
+        } else {
+            DecoderProfile.BEAM_HOTWORDS
+        }
         engine?.takeIf { version == modelId && it.profile == profile }?.let { return it }
         engine?.close(); engine = null; version = null
         val started = SystemClock.elapsedRealtime()
         Log.i(TAG, "Loading $modelId with the $profile decoder")
-        return OrukeetEngine(directory, profile).also {
+        return OfflineAsrEngine(directory, release, profile).also {
             engine = it
             version = modelId
             Log.i(TAG, "Loaded $modelId in ${SystemClock.elapsedRealtime() - started} ms")
@@ -109,7 +113,7 @@ class InferenceService : Service() {
 
         /** Worker thread only. */
         val gate = QuietGate()
-        var engine: OrukeetEngine? = null
+        var engine: OfflineAsrEngine? = null
         var available = 0L
         var decodedTo = 0L
         var decoding = false

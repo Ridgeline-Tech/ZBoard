@@ -3,15 +3,6 @@
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 package dev.patrickgold.florisboard.app.settings.voxtral
@@ -72,12 +63,9 @@ import org.florisboard.lib.compose.stringRes
 import org.ownkey.offline.LocalAsrException
 import org.ownkey.offline.LocalAsrFailure
 import org.ownkey.offline.ModelCatalog
+import org.ownkey.offline.ModelRelease
 
-/**
- * The dictation route choice and, below it, the on-device model group. The choice is the only place that
- * switches routes. A route that can't dictate yet stays visible but dimmed, says what is missing, and runs
- * its fix when tapped: the download dialog for On device, [onAddCloudKey] or [onFixCloudAddress] for Cloud.
- */
+/** Dictation route choice followed by explicit supported on-device model selection. */
 @Composable
 internal fun DictationSettings(
     hasCloudKey: Boolean,
@@ -90,64 +78,69 @@ internal fun DictationSettings(
     val prefs by FlorisPreferenceStore
     val selected by prefs.voxtral.dictationBackend.collectAsState()
     val controller = remember { context.offlineDictation() }
-    val previous by prefs.voxtral.previousDictationBackend.collectAsState()
     val state by controller.state.collectAsState()
     val runtime by controller.runtime.state.collectAsState()
     val scope = rememberCoroutineScope()
     var action by remember { mutableStateOf<Job?>(null) }
     var error by remember { mutableStateOf<LocalAsrFailure?>(null) }
     var errorDetail by remember { mutableStateOf<String?>(null) }
-    var downloadDialog by rememberSaveable { mutableStateOf(false) }
-    var deleteDialog by rememberSaveable { mutableStateOf(false) }
-    var noticesDialog by rememberSaveable { mutableStateOf(false) }
+    var downloadModelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteModelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var noticesModelId by rememberSaveable { mutableStateOf<String?>(null) }
     var mobileData by rememberSaveable { mutableStateOf(false) }
     var notices by remember { mutableStateOf("") }
     var waitReason by remember { mutableStateOf(DownloadWaitReason.STARTING) }
     val backend = TranscriptionBackend.resolve(selected, hasCloudKey, BuildConfig.DEBUG)
-    val previousBackend = TranscriptionBackend.resolve(previous, hasCloudKey, BuildConfig.DEBUG)
     val active = backend == TranscriptionBackend.ORUKEET
-    val working = action?.isActive == true || state.phase in setOf(ModelPhase.CHECKING, ModelPhase.ACTIVATING, ModelPhase.REMOVING)
+    val working = action?.isActive == true || state.phase in setOf(
+        ModelPhase.CHECKING,
+        ModelPhase.ACTIVATING,
+        ModelPhase.REMOVING,
+    )
     val transferring = state.transferPhase != null
-    val waiting = state.transferPhase == ModelPhase.WAITING_FOR_NETWORK
-    val candidateInstalled = ModelCatalog.current.id in state.installed
-    // An older verified model still dictates while its update downloads, so either one makes Orukeet usable.
-    val usableModelId = if (candidateInstalled) ModelCatalog.current.id else state.currentId
-    // Public builds don't offer a download the device can't run. A restored local selection still
-    // shows Orukeet, so there is a way back to another provider. Internal builds show it to report the reason.
-    val showOrukeet = BuildConfig.ORUKEET_INTERNAL || controller.compatible || selected == TranscriptionBackend.ORUKEET.preference
+    val models = listOf(ModelCatalog.recommended, ModelCatalog.orukeet)
+    val usableModelId = state.currentId ?: models.firstOrNull { it.id in state.installed }?.id
+    val showLocal = BuildConfig.ORUKEET_INTERNAL || controller.compatible ||
+        selected == TranscriptionBackend.ORUKEET.preference
     val cloudEndpointValid = isUsableCloudEndpoint(cloudEndpointUrl)
-    val cloudProvider = cloudProviderName(cloudEndpointUrl) ?: stringRes(R.string.settings__ai__status__custom_server)
+    val cloudProvider = cloudProviderName(cloudEndpointUrl)
+        ?: stringRes(R.string.settings__ai__status__custom_server)
+
     LaunchedEffect(state.transferPhase, state.allowMobileData) {
         while (state.transferPhase == ModelPhase.WAITING_FOR_NETWORK) {
             waitReason = ModelDownloadNetwork.waitReason(context, state.allowMobileData)
             delay(2000)
         }
     }
+
     fun perform(block: suspend () -> Unit) {
         if (action?.isActive == true) return
         action = scope.launch {
             error = null
             errorDetail = null
-            try { block() }
-            catch (cancel: CancellationException) { throw cancel }
-            catch (failure: Exception) {
+            try {
+                block()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: Exception) {
                 val local = failure as? LocalAsrException
                 error = local?.reason ?: LocalAsrFailure.RUNTIME
                 errorDetail = if (local != null) local.detail else failure.javaClass.simpleName
+            } finally {
+                action = null
             }
-            finally { action = null }
         }
     }
-    fun openDownloadDialog() {
+
+    fun openDownloadDialog(modelId: String) {
         mobileData = state.allowMobileData
-        downloadDialog = true
+        downloadModelId = modelId
     }
 
     OwnkeyGroup(
         title = stringRes(R.string.settings__ai__dictation__title),
         footer = stringRes(R.string.settings__ai__dictation__footer),
     ) {
-        // Debug builds without a key fall back to demo dictation, which has no choice of its own.
         if (backend == TranscriptionBackend.MOCK || backend == TranscriptionBackend.UNAVAILABLE) {
             OwnkeyNotice(text = stringResource(R.string.orukeet__selected, backendLabel(backend)))
         }
@@ -155,14 +148,13 @@ internal fun DictationSettings(
             modifier = Modifier.selectableGroup(),
             verticalArrangement = Arrangement.spacedBy(OwnkeyTokens.RowGap),
         ) {
-            if (showOrukeet) {
+            if (showLocal) {
                 val needsDownload = controller.compatible && usableModelId == null && !transferring && !working
                 OwnkeyChoiceRow(
                     label = stringRes(R.string.settings__ai__dictation__on_device),
                     summary = stringRes(R.string.settings__ai__dictation__on_device_summary),
                     note = when {
                         !controller.compatible -> stringRes(R.string.settings__ai__dictation__note_unsupported)
-                        // The first check after start-up hasn't read the stored model yet, so it can't be missing.
                         state.phase == ModelPhase.CHECKING -> stringRes(R.string.settings__ai__dictation__note_checking)
                         state.phase == ModelPhase.ACTIVATING -> stringRes(R.string.settings__ai__dictation__note_loading)
                         transferring -> stringRes(R.string.settings__ai__dictation__note_downloading)
@@ -175,7 +167,11 @@ internal fun DictationSettings(
                         val id = usableModelId
                         if (!active && id != null) perform { controller.activate(id) }
                     },
-                    onDisabledClick = if (needsDownload) ::openDownloadDialog else null,
+                    onDisabledClick = if (needsDownload) {
+                        { openDownloadDialog(ModelCatalog.recommended.id) }
+                    } else {
+                        null
+                    },
                     modifier = Modifier.testTag("dictation-option-orukeet"),
                 )
             }
@@ -190,7 +186,9 @@ internal fun DictationSettings(
                 selected = backend == TranscriptionBackend.CLOUD,
                 enabled = hasCloudKey && cloudEndpointValid && !working,
                 onClick = {
-                    if (backend != TranscriptionBackend.CLOUD) perform { controller.selectBackend(TranscriptionBackend.CLOUD) }
+                    if (backend != TranscriptionBackend.CLOUD) {
+                        perform { controller.selectBackend(TranscriptionBackend.CLOUD) }
+                    }
                 },
                 onDisabledClick = when {
                     !hasCloudKey -> onAddCloudKey
@@ -215,61 +213,143 @@ internal fun DictationSettings(
         dictionaryRow()
     }
 
-    if (showOrukeet) {
-        val modelValue = AiSettings.orukeetModelValue(controller.compatible, state, waitReason, active, runtime)
+    if (showLocal) {
         val shownError = error ?: state.error
-        val nextAction = AiSettings.orukeetNextAction(controller.compatible, state, active, shownError)
-        val progress = state.progress
-        OwnkeyGroup(title = stringRes(R.string.settings__ai__model__title)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface),
-            ) {
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__row),
-                    value = modelValue.label(progress?.let { AiSettings.downloadPercent(it.completed, it.total) }),
-                    valueColor = if (active && modelValue == OrukeetModelValue.NOT_DOWNLOADED) OwnkeyTokens.Warning else Color.Unspecified,
-                    summary = when (modelValue) {
-                        OrukeetModelValue.WAITING_FOR_WIFI -> stringRes(R.string.settings__ai__model__waiting_wifi_summary)
-                        OrukeetModelValue.WAITING_FOR_INTERNET -> stringRes(R.string.settings__ai__model__waiting_internet_summary)
-                        OrukeetModelValue.WAITING_TO_START -> stringRes(R.string.settings__ai__model__waiting_start_summary)
-                        OrukeetModelValue.DOWNLOADING, OrukeetModelValue.VERIFYING -> progress?.let {
-                            stringResource(R.string.orukeet__progress, it.completed / 1_000_000, it.total / 1_000_000)
-                        }
-                        else -> null
-                    },
-                    modifier = Modifier.testTag("orukeet-status"),
+        OwnkeyGroup(
+            title = stringRes(R.string.settings__ai__model__title),
+            footer = stringRes(R.string.settings__ai__model__supported_footer),
+        ) {
+            models.forEach { model ->
+                val isTransfer = state.transferModelId == model.id
+                val isOperation = state.operationModelId == model.id
+                val modelValue = AiSettings.orukeetModelValue(
+                    controller.compatible,
+                    state,
+                    waitReason,
+                    active,
+                    runtime,
+                    model.id,
                 )
-                if (transferring && !waiting) {
-                    val fraction = progress?.takeIf { it.total > 0 }?.let { (it.completed.toFloat() / it.total).coerceIn(0f, 1f) }
-                    val indicatorModifier = Modifier
+                val nextAction = AiSettings.orukeetNextAction(
+                    controller.compatible,
+                    state,
+                    active,
+                    shownError,
+                    model.id,
+                )
+                val progress = state.progress.takeIf { isTransfer }
+                Column(
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                    if (fraction == null) {
-                        LinearProgressIndicator(
-                            modifier = indicatorModifier,
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = OwnkeyTokens.Raised,
-                            strokeCap = StrokeCap.Round,
-                            gapSize = 0.dp,
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            progress = { fraction },
-                            modifier = indicatorModifier,
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = OwnkeyTokens.Raised,
-                            strokeCap = StrokeCap.Round,
-                            gapSize = 0.dp,
-                            drawStopIndicator = { },
+                        .background(MaterialTheme.colorScheme.surface),
+                ) {
+                    OwnkeyRow(
+                        title = model.displayName,
+                        value = modelValue.label(progress?.let { AiSettings.downloadPercent(it.completed, it.total) }),
+                        valueColor = if (active && state.currentId == model.id &&
+                            modelValue == OrukeetModelValue.NOT_DOWNLOADED
+                        ) OwnkeyTokens.Warning else Color.Unspecified,
+                        summary = modelSummary(model, modelValue, progress?.completed, progress?.total),
+                        modifier = Modifier.testTag("model-${model.id}-status"),
+                    )
+                    if (isTransfer && state.transferPhase != ModelPhase.WAITING_FOR_NETWORK) {
+                        val fraction = progress?.takeIf { it.total > 0 }?.let {
+                            (it.completed.toFloat() / it.total).coerceIn(0f, 1f)
+                        }
+                        val indicatorModifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                        if (fraction == null) {
+                            LinearProgressIndicator(
+                                modifier = indicatorModifier,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = OwnkeyTokens.Raised,
+                                strokeCap = StrokeCap.Round,
+                                gapSize = 0.dp,
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { fraction },
+                                modifier = indicatorModifier,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = OwnkeyTokens.Raised,
+                                strokeCap = StrokeCap.Round,
+                                gapSize = 0.dp,
+                                drawStopIndicator = { },
+                            )
+                        }
+                    }
+                }
+                if (nextAction != null) {
+                    CardBlock {
+                        OwnkeyButton(
+                            label = stringRes(nextAction.labelRes()),
+                            onClick = {
+                                when (nextAction) {
+                                    OrukeetNextAction.DOWNLOAD,
+                                    OrukeetNextAction.DOWNLOAD_UPDATE,
+                                    OrukeetNextAction.RETRY_DOWNLOAD,
+                                    -> openDownloadDialog(model.id)
+                                    OrukeetNextAction.USE,
+                                    OrukeetNextAction.APPLY_UPDATE,
+                                    -> perform { controller.activate(model.id) }
+                                }
+                            },
+                            enabled = !working && !transferring,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("model-${model.id}-action"),
                         )
                     }
                 }
+                if (isTransfer) {
+                    OwnkeyRow(
+                        title = stringRes(R.string.settings__ai__model__cancel_download),
+                        onClick = { ModelDownloads.cancel(context) },
+                        modifier = Modifier.testTag("model-${model.id}-cancel-download"),
+                    )
+                    if (state.transferPhase == ModelPhase.WAITING_FOR_NETWORK) {
+                        OwnkeyRow(
+                            title = stringRes(R.string.settings__ai__model__retry_now),
+                            enabled = !working,
+                            onClick = {
+                                perform { ModelDownloads.schedule(context, model.id, state.allowMobileData) }
+                            },
+                            modifier = Modifier.testTag("model-${model.id}-retry"),
+                        )
+                        OwnkeyRow(
+                            title = stringRes(R.string.settings__ai__model__change_connection),
+                            enabled = !working,
+                            onClick = { openDownloadDialog(model.id) },
+                            modifier = Modifier.testTag("model-${model.id}-change-connection"),
+                        )
+                    }
+                }
+                if (isOperation && state.phase == ModelPhase.ACTIVATING) {
+                    OwnkeyRow(
+                        title = stringRes(R.string.settings__ai__model__cancel_loading),
+                        onClick = { action?.cancel() },
+                        modifier = Modifier.testTag("model-${model.id}-cancel-loading"),
+                    )
+                }
+                if (model.id in state.installed) {
+                    OwnkeyRow(
+                        title = stringRes(R.string.settings__ai__model__delete),
+                        titleColor = OwnkeyTokens.Danger,
+                        enabled = state.currentId != model.id && !working && !transferring,
+                        onClick = { deleteModelId = model.id },
+                        modifier = Modifier.testTag("model-${model.id}-delete"),
+                    )
+                }
+                OwnkeyRow(
+                    title = stringRes(R.string.settings__ai__model__notices),
+                    onClick = { noticesModelId = model.id },
+                    modifier = Modifier.testTag("model-${model.id}-notices"),
+                )
             }
+
             if (shownError != null) {
                 OwnkeyNotice(text = stringResource(errorResource(shownError)), tone = OwnkeyTone.Error)
-                // Internal builds name the failure, so a phone problem can be reported without a debugger attached.
                 if (BuildConfig.ORUKEET_INTERNAL) {
                     val detail = if (error != null) errorDetail else state.errorDetail
                     CardBlock {
@@ -278,95 +358,31 @@ internal fun DictationSettings(
                                 R.string.orukeet__error_detail,
                                 listOfNotNull(shownError.name, detail).joinToString(" · "),
                             ),
-                            modifier = Modifier.testTag("orukeet-error-detail"),
+                            modifier = Modifier.testTag("local-model-error-detail"),
                             style = MaterialTheme.typography.bodySmall,
                             color = OwnkeyTokens.Secondary,
                         )
                     }
                 }
             }
-            if (nextAction != null) {
-                CardBlock {
-                    OwnkeyButton(
-                        label = stringRes(nextAction.labelRes()),
-                        onClick = {
-                            when (nextAction) {
-                                OrukeetNextAction.DOWNLOAD,
-                                OrukeetNextAction.DOWNLOAD_UPDATE,
-                                OrukeetNextAction.RETRY_DOWNLOAD,
-                                -> openDownloadDialog()
-                                // Same action as choosing On device above, offered here because this is where the download finishes.
-                                OrukeetNextAction.USE,
-                                OrukeetNextAction.APPLY_UPDATE,
-                                -> perform { controller.activate() }
-                            }
-                        },
-                        enabled = !working,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(
-                                when (nextAction) {
-                                    OrukeetNextAction.USE, OrukeetNextAction.APPLY_UPDATE -> "orukeet-activate"
-                                    else -> "orukeet-download"
-                                },
-                            ),
-                    )
-                }
-            }
-            if (transferring) {
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__cancel_download),
-                    onClick = { ModelDownloads.cancel(context) },
-                    modifier = Modifier.testTag("orukeet-cancel-download"),
-                )
-            }
-            if (waiting) {
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__retry_now),
-                    enabled = !working,
-                    onClick = { perform { ModelDownloads.schedule(context, state.allowMobileData) } },
-                    modifier = Modifier.testTag("orukeet-retry"),
-                )
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__change_connection),
-                    enabled = !working,
-                    onClick = ::openDownloadDialog,
-                    modifier = Modifier.testTag("orukeet-change-connection"),
-                )
-            }
-            if (state.phase == ModelPhase.ACTIVATING) {
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__cancel_loading),
-                    onClick = { action?.cancel() },
-                    modifier = Modifier.testTag("orukeet-cancel-loading"),
-                )
-            }
-            if (state.hasStoredData || active) {
-                OwnkeyRow(
-                    title = stringRes(R.string.settings__ai__model__delete),
-                    titleColor = OwnkeyTokens.Danger,
-                    enabled = !working && !transferring,
-                    onClick = { deleteDialog = true },
-                    modifier = Modifier.testTag("orukeet-delete"),
-                )
-            }
-            OwnkeyRow(
-                title = stringRes(R.string.settings__ai__model__notices),
-                onClick = { noticesDialog = true },
-                modifier = Modifier.testTag("orukeet-notices"),
-            )
         }
     }
 
-    if (downloadDialog) {
+    downloadModelId?.let { id ->
+        val model = ModelCatalog.trusted.first { it.id == id }
         OwnkeyDialog(
-            title = stringRes(R.string.settings__ai__model__download_title),
-            onDismiss = { downloadDialog = false },
-            text = stringRes(R.string.settings__ai__model__download_text),
+            title = stringRes(R.string.settings__ai__model__download_title_named, "model" to model.displayName),
+            onDismiss = { downloadModelId = null },
+            text = stringRes(
+                R.string.settings__ai__model__download_text_named,
+                "model" to model.displayName,
+                "download" to (model.bytes / 1_000_000L),
+                "setup" to ((model.bytes + ModelCatalog.RESERVE_BYTES) / 1_000_000L),
+            ),
             confirmLabel = stringRes(R.string.settings__ai__model__download),
             onConfirm = {
-                downloadDialog = false
-                perform { ModelDownloads.schedule(context, mobileData) }
+                downloadModelId = null
+                perform { ModelDownloads.schedule(context, model.id, mobileData) }
             },
             dismissLabel = stringRes(R.string.action__cancel),
         ) {
@@ -380,49 +396,53 @@ internal fun DictationSettings(
                         label = stringRes(label),
                         selected = mobileData == mobile,
                         onClick = { mobileData = mobile },
-                        modifier = Modifier.testTag(if (mobile) "orukeet-any-connection" else "orukeet-wifi-only"),
+                        modifier = Modifier.testTag(if (mobile) "model-any-connection" else "model-wifi-only"),
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             OwnkeyButton(
                 label = stringRes(R.string.settings__ai__model__notices),
-                onClick = { noticesDialog = true },
+                onClick = { noticesModelId = model.id },
                 style = OwnkeyButtonStyle.Plain,
             )
         }
     }
-    if (deleteDialog) {
+
+    deleteModelId?.let { id ->
+        val model = ModelCatalog.trusted.first { it.id == id }
         OwnkeyDialog(
-            title = stringRes(R.string.settings__ai__model__delete_title),
-            onDismiss = { deleteDialog = false },
-            text = if (active) {
-                stringRes(R.string.settings__ai__model__delete_active, "route" to backendLabel(previousBackend))
-            } else {
-                stringRes(R.string.settings__ai__model__delete_inactive)
-            },
+            title = stringRes(R.string.settings__ai__model__delete_title_named, "model" to model.displayName),
+            onDismiss = { deleteModelId = null },
+            text = stringRes(R.string.settings__ai__model__delete_inactive_named, "model" to model.displayName),
             confirmLabel = stringRes(R.string.settings__ai__model__delete_confirm),
             onConfirm = {
-                deleteDialog = false
-                perform { controller.delete() }
+                deleteModelId = null
+                perform { controller.delete(model.id) }
             },
             destructive = true,
             dismissLabel = stringRes(R.string.action__cancel),
         )
     }
-    if (noticesDialog) {
-        LaunchedEffect(Unit) {
+
+    noticesModelId?.let { id ->
+        val model = ModelCatalog.trusted.first { it.id == id }
+        LaunchedEffect(id) {
             notices = withContext(Dispatchers.IO) {
-                listOf("NOTICE.md", "LICENSE-WEIGHTS", "LICENSE").joinToString("\n\n") { name ->
-                    context.assets.open("thirdparty/orukeet/$name").bufferedReader().use { it.readText() }
+                if (id == ModelCatalog.orukeet.id) {
+                    listOf("NOTICE.md", "LICENSE-WEIGHTS", "LICENSE").joinToString("\n\n") { name ->
+                        context.assets.open("thirdparty/orukeet/$name").bufferedReader().use { it.readText() }
+                    }
+                } else {
+                    context.assets.open("thirdparty/parakeet/README.md").bufferedReader().use { it.readText() }
                 }
             }
         }
         OwnkeyDialog(
-            title = stringRes(R.string.settings__ai__model__notices),
-            onDismiss = { noticesDialog = false },
+            title = stringRes(R.string.settings__ai__model__notices_named, "model" to model.displayName),
+            onDismiss = { noticesModelId = null },
             confirmLabel = stringRes(R.string.orukeet__close),
-            onConfirm = { noticesDialog = false },
+            onConfirm = { noticesModelId = null },
         ) {
             Text(
                 text = notices,
@@ -431,6 +451,24 @@ internal fun DictationSettings(
             )
         }
     }
+}
+
+@Composable
+private fun modelSummary(
+    model: ModelRelease,
+    value: OrukeetModelValue,
+    completed: Long?,
+    total: Long?,
+): String = when (value) {
+    OrukeetModelValue.WAITING_FOR_WIFI -> stringRes(R.string.settings__ai__model__waiting_wifi_summary)
+    OrukeetModelValue.WAITING_FOR_INTERNET -> stringRes(R.string.settings__ai__model__waiting_internet_summary)
+    OrukeetModelValue.WAITING_TO_START -> stringRes(R.string.settings__ai__model__waiting_start_summary)
+    OrukeetModelValue.DOWNLOADING, OrukeetModelValue.VERIFYING -> if (completed != null && total != null) {
+        stringResource(R.string.orukeet__progress, completed / 1_000_000, total / 1_000_000)
+    } else {
+        model.description
+    }
+    else -> model.description
 }
 
 @Composable
@@ -481,7 +519,6 @@ private fun errorResource(error: LocalAsrFailure): Int = when (error) {
     LocalAsrFailure.MODEL_MISSING -> R.string.orukeet__not_ready
     LocalAsrFailure.BUSY -> R.string.orukeet__busy_error
     LocalAsrFailure.DOWNLOAD -> R.string.orukeet__download_error
-    // This group only runs model operations, so these three come from loading the model, not from a recording.
     LocalAsrFailure.PROCESS_DIED -> R.string.orukeet__load_process_died
     LocalAsrFailure.TIMEOUT -> R.string.orukeet__load_timeout
     LocalAsrFailure.RUNTIME -> R.string.orukeet__load_runtime

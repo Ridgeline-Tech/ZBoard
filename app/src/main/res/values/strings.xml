@@ -996,7 +996,8 @@
     </plurals>
 
     <!-- AI: On-device model -->
-    <string name="settings__ai__model__title" comment="Group header of the on-device model settings">On-device model</string>
+    <string name="settings__ai__model__title" comment="Group header of the on-device model settings">On-device models</string>
+    <string name="settings__ai__model__supported_footer" comment="Explains the supported model list">Choose from models tested with Z Board. Downloading a model does not select it or remove another model.</string>
     <string name="settings__ai__model__row" comment="Status row title for the Orukeet model">Orukeet model</string>
     <string name="settings__ai__model__checking" comment="Orukeet model status">Checking…</string>
     <string name="settings__ai__model__not_downloaded" comment="Orukeet model status">Not downloaded</string>
@@ -1029,12 +1030,17 @@
     <string name="settings__ai__model__notices" comment="Row that opens the Orukeet license and notices">License and notices</string>
     <string name="settings__ai__model__download_title" comment="Title of the Orukeet download dialog">Download Orukeet?</string>
     <string name="settings__ai__model__download_text" comment="Body of the Orukeet download dialog">Orukeet recognises the language on its own, including Dutch and English. The download is 672 MB, and setup needs about 940 MB of free storage. Downloading doesn\'t change your dictation route.</string>
+    <string name="settings__ai__model__download_title_named" formatted="false" comment="Download dialog title; {model} is a supported local model name">Download {model}?</string>
+    <string name="settings__ai__model__download_text_named" formatted="false" comment="Download dialog body; {model} is a model name and {download}/{setup} are megabytes">{model} runs transcription on this phone. The download is about {download} MB, and setup needs about {setup} MB of free storage. Downloading does not select it or remove another model.</string>
     <string name="settings__ai__model__wifi_only" comment="Download connection choice">Wi-Fi or Ethernet only</string>
     <string name="settings__ai__model__any_connection" comment="Download connection choice">Any connection, including mobile data</string>
     <string name="settings__ai__model__delete_title" comment="Title of the delete model dialog">Delete the model?</string>
     <string name="settings__ai__model__delete_active" comment="Delete dialog body when Orukeet is the dictation route; {route} is the route it switches back to">Dictation switches back to {route}. To use Orukeet again, you\'ll need to download it again.</string>
     <string name="settings__ai__model__delete_inactive" comment="Delete dialog body when Orukeet isn't the dictation route">This deletes the downloaded model and any partial download. Your dictation route stays the same.</string>
     <string name="settings__ai__model__delete_confirm" comment="Destructive confirm button of the delete model dialog">Delete</string>
+    <string name="settings__ai__model__delete_title_named" formatted="false" comment="Delete dialog title; {model} is a supported local model name">Delete {model}?</string>
+    <string name="settings__ai__model__delete_inactive_named" formatted="false" comment="Delete dialog body for an inactive model">This deletes {model} and its partial download only. The active model, dictation route, and other settings stay unchanged.</string>
+    <string name="settings__ai__model__notices_named" formatted="false" comment="License dialog title; {model} is a supported local model name">{model} license and notices</string>
 
     <!-- AI: Cloud dictation -->
     <string name="settings__ai__cloud__title" comment="Group header of the cloud dictation settings">Cloud dictation</string>
