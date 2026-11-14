@@ -64,6 +64,7 @@ class AiSettingsLogicTest : FunSpec({
     test("the cloud provider is a known name, else the server's host, with Mistral for a blank address") {
         cloudProviderName("") shouldBe "Mistral"
         cloudProviderName("https://api.openai.com/v1/audio/transcriptions") shouldBe "OpenAI"
+        cloudProviderName("https://api.deepgram.com/v1/listen") shouldBe "Deepgram"
         cloudProviderName("http://asr.example.com:8000/v1") shouldBe "asr.example.com"
         cloudProviderName("https://") shouldBe null
         isUsableCloudEndpoint(" ") shouldBe true
@@ -90,6 +91,7 @@ class AiSettingsLogicTest : FunSpec({
             AiSettings.cloudFooter("", CloudVocabularyMode.OFF, 2).sendsDictionaryWords shouldBe false
             // Automatic sends nothing to a server it doesn't know; Send as prompt always does.
             AiSettings.cloudFooter("https://asr.example.com/v1", CloudVocabularyMode.AUTO, 2).sendsDictionaryWords shouldBe false
+            AiSettings.cloudFooter("https://api.deepgram.com/v1/listen", CloudVocabularyMode.AUTO, 2).sendsDictionaryWords shouldBe true
             AiSettings.cloudFooter("https://asr.example.com/v1", CloudVocabularyMode.PROMPT, 2).sendsDictionaryWords shouldBe true
         }
 

@@ -34,6 +34,7 @@ class CloudVocabularyHintsTest : FunSpec({
 
     val mistral = "https://api.mistral.ai/v1/audio/transcriptions"
     val openai = "https://api.openai.com/v1/audio/transcriptions"
+    val deepgram = "https://api.deepgram.com/v1/listen"
     val custom = "https://asr.example.org/v1/audio/transcriptions"
 
     test("automatic mode only uses documented fields and sends nothing to unknown endpoints") {
@@ -41,6 +42,7 @@ class CloudVocabularyHintsTest : FunSpec({
         CloudVocabularyHints.field("HTTPS://user@API.MISTRAL.AI:443/v1/audio/transcriptions?x=1", CloudVocabularyMode.AUTO) shouldBe
             CloudVocabularyField.CONTEXT_BIAS
         CloudVocabularyHints.field(openai, CloudVocabularyMode.AUTO) shouldBe CloudVocabularyField.PROMPT
+        CloudVocabularyHints.field(deepgram, CloudVocabularyMode.AUTO) shouldBe CloudVocabularyField.KEYTERM
         CloudVocabularyHints.field(custom, CloudVocabularyMode.AUTO) shouldBe CloudVocabularyField.NONE
         CloudVocabularyHints.field("https://openrouter.ai/api/v1/audio/transcriptions", CloudVocabularyMode.AUTO) shouldBe
             CloudVocabularyField.NONE

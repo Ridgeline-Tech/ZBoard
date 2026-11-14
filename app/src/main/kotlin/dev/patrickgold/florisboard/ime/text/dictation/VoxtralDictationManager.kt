@@ -678,10 +678,19 @@ class VoxtralDictationManager(
                     CloudVocabularyMode.fromPreference(prefs.voxtral.cloudVocabularyMode.get()),
                 )
                 val vocabulary = dictionary.vocabulary
-                TranscriptionSession(backend, MediaRecorderAudioRecorder(appContext), VoxtralRelayTranscriptionClient(
-                    apiKeyProvider = { key }, endpointUrlProvider = { endpoint }, modelProvider = { model }, languageHintProvider = { language },
-                    vocabularyProvider = { vocabulary }, vocabularyFieldProvider = { vocabularyField },
-                ), dictionary)
+                TranscriptionSession(
+                    backend,
+                    MediaRecorderAudioRecorder(appContext),
+                    CloudTranscriptionClientFactory.create(
+                        apiKey = key,
+                        endpointUrl = endpoint,
+                        model = model,
+                        languageHint = language,
+                        vocabulary = vocabulary,
+                        vocabularyField = vocabularyField,
+                    ),
+                    dictionary,
+                )
             }
         }
     }

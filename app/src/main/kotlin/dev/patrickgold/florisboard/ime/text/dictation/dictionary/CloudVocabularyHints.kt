@@ -38,11 +38,15 @@ enum class CloudVocabularyField {
 
     /** One comma-separated `prompt` part, the OpenAI transcription convention. */
     PROMPT,
+
+    /** Repeated `keyterm` query values handled by the native Deepgram client. */
+    KEYTERM,
 }
 
 object CloudVocabularyHints {
     private const val MISTRAL_HOST = "api.mistral.ai"
     private const val OPENAI_HOST = "api.openai.com"
+    private const val DEEPGRAM_HOST = "api.deepgram.com"
 
     /**
      * Request-side budget for one upload. Saved entries are never truncated; only the request is,
@@ -87,6 +91,7 @@ object CloudVocabularyHints {
         CloudVocabularyMode.AUTO -> when (hostOf(endpointUrl)) {
             MISTRAL_HOST -> CloudVocabularyField.CONTEXT_BIAS
             OPENAI_HOST -> CloudVocabularyField.PROMPT
+            DEEPGRAM_HOST -> CloudVocabularyField.KEYTERM
             else -> CloudVocabularyField.NONE
         }
     }
