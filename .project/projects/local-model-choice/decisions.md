@@ -27,3 +27,15 @@ No Gboard or emulator comparison is reopened. No phone install or modification i
 ## 2026-11-14 - Planning scaffold correction
 
 The repository initializer completed but its unquoted heredoc interpreted Markdown command syntax, leaving placeholder planning files. We inspected generated artifacts, repaired them with literal content, and will validate the resulting project rather than trusting the initializer's exit status alone.
+
+## 2026-11-14 - Separate source, model-data, and app-release proof
+
+Model-data publication, source merge, package/version identity, and update-compatible signing are independent gates. Evidence: the exact Parakeet assets were published and source PR #3 merged, while the local 0.12.0 APK remained debug-signed and was not published. Future release handoffs must report these gates separately.
+
+## 2026-11-14 - Preserve runtime uncertainty
+
+Matching OpenWhispr's Parakeet decoder metadata is source compatibility evidence, not proof of latency, accuracy, or dictionary behavior. Independent review confirmed the source mapping and retained real-model inference as an explicit verification limit.
+
+## 2026-11-14 - Test wrapper event logging is not the test result
+
+The Gradle gate and structured run receipt succeeded, but the post-run `log-event.js` helper failed because the parent workspace declares Node ESM while the helper uses CommonJS. Preserve the underlying command exit/log as authoritative and fix the logger through a separately reviewed tooling change.
