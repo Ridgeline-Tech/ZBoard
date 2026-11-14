@@ -39,3 +39,9 @@ Matching OpenWhispr's Parakeet decoder metadata is source compatibility evidence
 ## 2026-11-14 - Test wrapper event logging is not the test result
 
 The Gradle gate and structured run receipt succeeded, but the post-run `log-event.js` helper failed because the parent workspace declares Node ESM while the helper uses CommonJS. Preserve the underlying command exit/log as authoritative and fix the logger through a separately reviewed tooling change.
+
+## 2026-11-14 - Direct native Deepgram for this personal tool
+
+Zac's exact direction is: "Leta add depgram connection but notnoversecure thebapi key.. personal tool.. not concerned with sexurtity".
+
+Implement the smallest native Deepgram prerecorded-audio adapter, with no relay or token broker. Reuse the existing encrypted API-key store, send the key only to Deepgram's fixed HTTPS API host, do not put secrets in source or logs, and surface bounded generic errors. Preserve the existing configurable cloud client and local Orukeet/Parakeet paths. This source decision does not authorize credentials, provider calls, phone changes, catalog publication, or signing-boundary changes.

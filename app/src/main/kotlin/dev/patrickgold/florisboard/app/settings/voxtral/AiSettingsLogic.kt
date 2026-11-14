@@ -16,8 +16,10 @@
 
 package dev.patrickgold.florisboard.app.settings.voxtral
 
+import dev.patrickgold.florisboard.ime.text.dictation.DeepgramTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.TranscriptionLanguageHints
 import dev.patrickgold.florisboard.ime.text.dictation.TranscriptionLanguageMode
+import dev.patrickgold.florisboard.ime.text.dictation.VoxtralRelayTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyField
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyHints
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyMode
@@ -97,6 +99,18 @@ object AiSettings {
 
     /** What to store from a dialog field: empty means the default. */
     fun storedValueOf(input: String, default: String): String = input.trim().ifEmpty { default }
+
+    /** The native Deepgram route has its own model default; compatible endpoints retain the existing default. */
+    fun cloudModelDefault(endpointUrl: String): String =
+        if (DeepgramTranscriptionClient.ownsEndpoint(cloudEndpoint(endpointUrl))) {
+            DeepgramTranscriptionClient.DefaultModel
+        } else {
+            VoxtralRelayTranscriptionClient.DefaultModel
+        }
+
+    /** An empty cloud-model field stores the default for the address being saved. */
+    fun cloudModelToStore(endpointUrl: String, input: String): String =
+        input.trim().ifEmpty { cloudModelDefault(endpointUrl) }
 
     /** A server address field accepts http(s) URLs, and an empty field where a default exists. */
     fun isAcceptableServerAddress(input: String, emptyAllowed: Boolean): Boolean {

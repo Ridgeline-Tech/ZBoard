@@ -288,6 +288,8 @@ class VoxtralRelayTranscriptionClient(
                     CloudVocabularyField.PROMPT -> out.writeMultipartField(
                         boundary, "prompt", CloudVocabularyHints.promptText(preparedRequest.vocabulary),
                     )
+                    // Deepgram's native client carries keyterms in the query, never multipart.
+                    CloudVocabularyField.KEYTERM -> Unit
                 }
                 out.writeMultipartFile(
                     boundary = boundary,

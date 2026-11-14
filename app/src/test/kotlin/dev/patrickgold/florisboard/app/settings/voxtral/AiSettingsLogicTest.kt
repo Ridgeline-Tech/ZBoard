@@ -16,6 +16,7 @@
 
 package dev.patrickgold.florisboard.app.settings.voxtral
 
+import dev.patrickgold.florisboard.ime.text.dictation.DeepgramTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.VoxtralRelayTranscriptionClient
 import dev.patrickgold.florisboard.ime.text.dictation.dictionary.CloudVocabularyMode
 import dev.patrickgold.florisboard.ime.text.dictation.offline.DownloadWaitReason
@@ -64,6 +65,7 @@ class AiSettingsLogicTest : FunSpec({
     test("the cloud provider is a known name, else the server's host, with Mistral for a blank address") {
         cloudProviderName("") shouldBe "Mistral"
         cloudProviderName("https://api.openai.com/v1/audio/transcriptions") shouldBe "OpenAI"
+        cloudProviderName("https://api.deepgram.com/v1/listen") shouldBe "Deepgram"
         cloudProviderName("http://asr.example.com:8000/v1") shouldBe "asr.example.com"
         cloudProviderName("https://") shouldBe null
         isUsableCloudEndpoint(" ") shouldBe true
@@ -90,6 +92,7 @@ class AiSettingsLogicTest : FunSpec({
             AiSettings.cloudFooter("", CloudVocabularyMode.OFF, 2).sendsDictionaryWords shouldBe false
             // Automatic sends nothing to a server it doesn't know; Send as prompt always does.
             AiSettings.cloudFooter("https://asr.example.com/v1", CloudVocabularyMode.AUTO, 2).sendsDictionaryWords shouldBe false
+            AiSettings.cloudFooter("https://api.deepgram.com/v1/listen", CloudVocabularyMode.AUTO, 2).sendsDictionaryWords shouldBe true
             AiSettings.cloudFooter("https://asr.example.com/v1", CloudVocabularyMode.PROMPT, 2).sendsDictionaryWords shouldBe true
         }
 
@@ -112,6 +115,14 @@ class AiSettingsLogicTest : FunSpec({
             AiSettings.draftOf(" https://asr.example.com ", default) shouldBe "https://asr.example.com"
             AiSettings.storedValueOf("  ", default) shouldBe default
             AiSettings.storedValueOf(" https://asr.example.com ", default) shouldBe "https://asr.example.com"
+        }
+
+        test("an empty model stores the default for the address being saved") {
+            AiSettings.cloudModelToStore(DeepgramTranscriptionClient.EndpointUrl, "  ") shouldBe
+                DeepgramTranscriptionClient.DefaultModel
+            AiSettings.cloudModelToStore(VoxtralRelayTranscriptionClient.DefaultEndpointUrl, "  ") shouldBe
+                VoxtralRelayTranscriptionClient.DefaultModel
+            AiSettings.cloudModelToStore(DeepgramTranscriptionClient.EndpointUrl, " nova-2 ") shouldBe "nova-2"
         }
 
         test("only http and https addresses can be saved") {

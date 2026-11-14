@@ -552,7 +552,7 @@ private suspend fun selectRewriteProvider(
     }
 }
 
-/** Server address and model of cloud dictation. Empty fields mean Mistral's defaults, shown as hints. */
+/** Server address and model of cloud dictation. Empty fields mean the selected provider's defaults. */
 @Composable
 private fun CloudProviderDialog(
     storedEndpointUrl: String,
@@ -561,8 +561,9 @@ private fun CloudProviderDialog(
     onDismiss: () -> Unit,
 ) {
     val defaultAddress = VoxtralRelayTranscriptionClient.DefaultEndpointUrl
-    val defaultModel = VoxtralRelayTranscriptionClient.DefaultModel
     var address by rememberSaveable { mutableStateOf(AiSettings.draftOf(storedEndpointUrl, defaultAddress)) }
+    val effectiveAddress = AiSettings.storedValueOf(address, defaultAddress)
+    val defaultModel = AiSettings.cloudModelDefault(effectiveAddress)
     var model by rememberSaveable { mutableStateOf(AiSettings.draftOf(storedModel, defaultModel)) }
     val canSave = AiSettings.isAcceptableServerAddress(address, emptyAllowed = true)
     OwnkeyDialog(
@@ -572,7 +573,7 @@ private fun CloudProviderDialog(
         confirmLabel = stringRes(R.string.settings__ai__save),
         onConfirm = {
             if (canSave) {
-                onSave(AiSettings.storedValueOf(address, defaultAddress), AiSettings.storedValueOf(model, defaultModel))
+                onSave(effectiveAddress, AiSettings.cloudModelToStore(effectiveAddress, model))
             }
         },
         confirmEnabled = canSave,
@@ -603,7 +604,7 @@ private fun CloudProviderDialog(
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Done),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        // Empty fields mean Mistral's defaults, so resetting clears them; Save stores the reset.
+        // Empty fields mean provider defaults, so resetting clears them; Save stores the reset.
         OwnkeyButton(
             label = stringRes(R.string.settings__ai__cloud_provider__reset),
             onClick = {
