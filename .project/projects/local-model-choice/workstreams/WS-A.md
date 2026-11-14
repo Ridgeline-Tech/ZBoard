@@ -2,7 +2,7 @@
 id: WS-A
 name: Model lifecycle and settings
 owner: project-lead
-status: active
+status: done
 created: 2026-11-14T09:20:00Z
 updated: 2026-11-14T09:20:00Z
 ---
