@@ -16,7 +16,7 @@ No existing compatible production-signing material or signing service is wired i
 
 ## Smallest recommendation
 
-Recommended owner action: Zac through Rivet identifies the existing custodian of the `8e66a1...d33f` signing key and asks that custodian to run the existing manual release process for merge `baa3eed4f97564bd21888d6d291e453dc5ac029d`. The key does not need to be copied or exposed to this workspace. Return only the signed arm64 APK and release receipt for independent verification of package, version code 127, signer, SHA-256, and release asset identity before updating the catalog.
+Recommended owner action: Zac through Rivet identifies the existing custodian of the `8e66a1...d33f` signing key and asks that custodian to run the existing manual release process for merge `baa3eed4f97564bd21888d6d291e453dc5ac029d`. Before building, the custodian must verify locally that the selected keystore certificate is exactly `8e66a1d248902ff133925e9c43f087d004d6db1439ab1bfbe81428fcc092d33f`; no key or password needs to be copied or exposed to this workspace. Return only the signed arm64 APK and release receipt for independent verification of package, version code 127, signer, SHA-256, and release asset identity before updating the catalog.
 
 If that custodian is unavailable, the safe alternative is to wait for the upstream Ownkey maintainer to publish a signed release containing the merged change and mirror that APK byte-for-byte. Creating a new key, using the debug signer, changing package identity, uninstalling, or wiping data would not provide an update-compatible path and is not recommended.
 
