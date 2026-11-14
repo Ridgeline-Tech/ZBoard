@@ -118,6 +118,21 @@ class ModelStore(val root: File, val catalog: List<ModelRelease> = ModelCatalog.
         }
     }
 
+    /** Remove one inactive trusted model and its partial download without touching other models or settings. */
+    fun remove(id: String) = synchronized(lock) {
+        release(id)
+        if (current == id || leases.getOrDefault(id, 0) > 0) {
+            throw LocalAsrException(LocalAsrFailure.BUSY)
+        }
+        val model = modelDirectory(id)
+        val staging = stagingDirectory(id)
+        if ((model.exists() && !model.deleteRecursively()) || (staging.exists() && !staging.deleteRecursively())) {
+            throw LocalAsrException(LocalAsrFailure.DOWNLOAD)
+        }
+        verified.remove(id)
+    }
+
+    /** Legacy maintenance hook; interactive model choice must use [remove] explicitly instead. */
     fun removeUnusedVersions() = synchronized(lock) {
         catalog.filter { it.id != current && leases.getOrDefault(it.id, 0) == 0 }.forEach {
             if (modelDirectory(it.id).deleteRecursively()) verified.remove(it.id)

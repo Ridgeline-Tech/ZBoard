@@ -78,6 +78,38 @@ class ModelLifecycleTest {
         assertNull(store.currentId)
     }
 
+    @Test fun `explicit removal preserves the selected and other installed models`() = fixture { store, _ ->
+        install(store, "test-v1")
+        install(store, "test-v2")
+        store.commit("test-v1")
+
+        val activeError = assertFailsWith<LocalAsrException> { store.remove("test-v1") }
+        assertEquals(LocalAsrFailure.BUSY, activeError.reason)
+        store.remove("test-v2")
+
+        assertEquals("test-v1", store.currentId)
+        assertEquals(setOf("test-v1"), store.installedIds)
+        assertTrue(store.modelDirectory("test-v1").isDirectory)
+        assertFalse(store.modelDirectory("test-v2").exists())
+    }
+
+    @Test fun `trusted catalog preserves Orukeet and pins the Parakeet architecture`() {
+        assertEquals("orukeet-v0.1.0-int8", ModelCatalog.orukeet.id)
+        assertEquals(ModelCatalog.orukeet, ModelCatalog.current)
+        assertEquals("parakeet-0.6b-v3-int8", ModelCatalog.recommended.id)
+        assertEquals(setOf(ModelCatalog.orukeet.id, ModelCatalog.parakeet.id), ModelCatalog.trusted.map { it.id }.toSet())
+        assertEquals("bpe", ModelCatalog.orukeet.hotwords?.modelingUnit)
+        assertEquals("bpe.vocab", ModelCatalog.orukeet.hotwords?.bpeVocab)
+        assertEquals(1.5f, ModelCatalog.orukeet.hotwords?.score)
+        assertEquals("cjkchar", ModelCatalog.parakeet.hotwords?.modelingUnit)
+        assertNull(ModelCatalog.parakeet.hotwords?.bpeVocab)
+        assertEquals(2.0f, ModelCatalog.parakeet.hotwords?.score)
+        assertEquals(
+            setOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt", "README.md"),
+            ModelCatalog.parakeet.files.map { it.name }.toSet(),
+        )
+    }
+
     @Test fun `corrupt candidate preserves the previous verified version`() = fixture { store, _ ->
         install(store); store.commit("test-v1")
         store.stagingDirectory("test-v2").mkdirs()

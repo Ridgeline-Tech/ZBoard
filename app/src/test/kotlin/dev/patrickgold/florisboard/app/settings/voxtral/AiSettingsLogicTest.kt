@@ -181,33 +181,38 @@ class AiSettingsLogicTest : FunSpec({
             value(LocalModelState()) shouldBe OrukeetModelValue.CHECKING
             value(idle, compatible = false) shouldBe OrukeetModelValue.UNSUPPORTED
             value(idle) shouldBe OrukeetModelValue.NOT_DOWNLOADED
-            value(idle.copy(phase = ModelPhase.ACTIVATING)) shouldBe OrukeetModelValue.LOADING
-            value(idle.copy(phase = ModelPhase.REMOVING)) shouldBe OrukeetModelValue.DELETING
+            value(idle.copy(phase = ModelPhase.ACTIVATING, operationModelId = catalog)) shouldBe OrukeetModelValue.LOADING
+            value(idle.copy(phase = ModelPhase.REMOVING, operationModelId = catalog)) shouldBe OrukeetModelValue.DELETING
             value(installed) shouldBe OrukeetModelValue.DOWNLOADED
             value(inUse, active = true) shouldBe OrukeetModelValue.READY
             value(inUse, active = true, runtime = RuntimeState.LOADING) shouldBe OrukeetModelValue.LOADING
             value(inUse, active = true, runtime = RuntimeState.TRANSCRIBING) shouldBe OrukeetModelValue.IN_USE
-            value(oldInUse, active = true) shouldBe OrukeetModelValue.UPDATE_AVAILABLE
+            value(oldInUse, active = true) shouldBe OrukeetModelValue.NOT_DOWNLOADED
         }
 
         test("transfers report downloading, verifying or why they wait") {
-            val downloading = idle.copy(transferPhase = ModelPhase.DOWNLOADING, progress = DownloadProgress(1, 2))
+            val downloading = idle.copy(
+                transferPhase = ModelPhase.DOWNLOADING,
+                transferModelId = catalog,
+                progress = DownloadProgress(1, 2),
+            )
             value(downloading) shouldBe OrukeetModelValue.DOWNLOADING
-            value(idle.copy(transferPhase = ModelPhase.VERIFYING)) shouldBe OrukeetModelValue.VERIFYING
-            val waiting = idle.copy(transferPhase = ModelPhase.WAITING_FOR_NETWORK)
+            value(idle.copy(transferPhase = ModelPhase.VERIFYING, transferModelId = catalog)) shouldBe OrukeetModelValue.VERIFYING
+            val waiting = idle.copy(transferPhase = ModelPhase.WAITING_FOR_NETWORK, transferModelId = catalog)
             value(waiting, waitReason = DownloadWaitReason.WIFI_REQUIRED) shouldBe OrukeetModelValue.WAITING_FOR_WIFI
             value(waiting, waitReason = DownloadWaitReason.NO_INTERNET) shouldBe OrukeetModelValue.WAITING_FOR_INTERNET
             value(waiting, waitReason = DownloadWaitReason.STARTING) shouldBe OrukeetModelValue.WAITING_TO_START
+            value(downloading.copy(transferModelId = "model-a")) shouldBe OrukeetModelValue.NOT_DOWNLOADED
         }
 
         test("one primary action at a time") {
             action(idle) shouldBe OrukeetNextAction.DOWNLOAD
             action(idle, error = LocalAsrFailure.DOWNLOAD) shouldBe OrukeetNextAction.RETRY_DOWNLOAD
-            action(oldInUse, active = true) shouldBe OrukeetNextAction.DOWNLOAD_UPDATE
+            action(oldInUse, active = true) shouldBe OrukeetNextAction.DOWNLOAD
             action(installed) shouldBe OrukeetNextAction.USE
             // Chosen as the route but never activated: the downloaded model only has to be put to use.
             action(installed, active = true) shouldBe OrukeetNextAction.USE
-            action(installed.copy(currentId = "model-a"), active = true) shouldBe OrukeetNextAction.APPLY_UPDATE
+            action(installed.copy(currentId = "model-a"), active = true) shouldBe OrukeetNextAction.USE
             action(inUse, active = true) shouldBe null
         }
 
